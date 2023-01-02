@@ -81,6 +81,18 @@ void AMultiplayerCMCCharacter::SetupPlayerInputComponent(class UInputComponent* 
 	PlayerInputComponent->BindTouch(IE_Released, this, &AMultiplayerCMCCharacter::TouchStopped);
 }
 
+FCollisionQueryParams AMultiplayerCMCCharacter::GetIgnoreCharacterParams() const
+{
+	FCollisionQueryParams Params;
+
+	TArray<AActor*> CharacterChildren;
+	GetAllChildActors(CharacterChildren);
+	Params.AddIgnoredActors(CharacterChildren);
+	Params.AddIgnoredActor(this);
+
+	return Params;
+}
+
 void AMultiplayerCMCCharacter::TouchStarted(ETouchIndex::Type FingerIndex, FVector Location)
 {
 	Jump();

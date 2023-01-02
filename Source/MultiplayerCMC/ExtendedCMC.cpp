@@ -3,7 +3,14 @@
 
 #include "ExtendedCMC.h"
 
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
+
+UExtendedCMC::FSavedMove_Extended::FSavedMove_Extended()
+{
+	Saved_bWantsToSprint=0;
+	Saved_bPrevWantsToCrouch=0;
+}
 
 bool UExtendedCMC::FSavedMove_Extended::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter,
                                                        float MaxDelta) const
@@ -26,10 +33,9 @@ void UExtendedCMC::FSavedMove_Extended::Clear()
 
 uint8 UExtendedCMC::FSavedMove_Extended::GetCompressedFlags() const
 {
-	uint8 Result = Super::GetCompressedFlags();
-
+	uint8 Result = FSavedMove_Character::GetCompressedFlags();
+	
 	if (Saved_bWantsToSprint) Result |= FLAG_Custom_0;
-
 	return Result;
 }
 
@@ -38,16 +44,18 @@ void UExtendedCMC::FSavedMove_Extended::SetMoveFor(ACharacter* C, float InDeltaT
 {
 	FSavedMove_Character::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
 
-	UExtendedCMC* CharacterMovement = Cast<UExtendedCMC>(C->GetCharacterMovement());
+	const UExtendedCMC* CharacterMovement = Cast<UExtendedCMC>(C->GetCharacterMovement());
 	Saved_bWantsToSprint = CharacterMovement->Safe_bWantsToSprint;
+	Saved_bPrevWantsToCrouch = CharacterMovement->Safe_bPrevWantsToCrouch;
 }
 
 void UExtendedCMC::FSavedMove_Extended::PrepMoveFor(ACharacter* C)
 {
-	Super::PrepMoveFor(C);
+	FSavedMove_Character::PrepMoveFor(C);
 
 	UExtendedCMC* CharacterMovement = Cast<UExtendedCMC>(C->GetCharacterMovement());
 	CharacterMovement->Safe_bWantsToSprint = Saved_bWantsToSprint;
+	CharacterMovement->Safe_bPrevWantsToCrouch = Saved_bPrevWantsToCrouch;
 }
 
 UExtendedCMC::FNetworkPredictionData_Client_Extended::FNetworkPredictionData_Client_Extended(const UCharacterMovementComponent& ClientMovement)
@@ -93,13 +101,157 @@ void UExtendedCMC::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocat
 		{
 			MaxWalkSpeed = Walk_MaxWalkSpeed;
 		}
-		
 	}
+
+	Safe_bPrevWantsToCrouch = bWantsToCrouch;
+}
+
+bool UExtendedCMC::IsMovingOnGround() const
+{
+	return Super::IsMovingOnGround() || IsCustomMovementMode(CMOVE_Slide);
+}
+
+bool UExtendedCMC::CanCrouchInCurrentState() const
+{
+	return Super::CanCrouchInCurrentState() && IsMovingOnGround();
+}
+
+void UExtendedCMC::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
+{
+	if (MovementMode == MOVE_Walking && !bWantsToCrouch && Safe_bPrevWantsToCrouch)
+	{
+		FHitResult PotentialSlideSurfaces;
+		if (Velocity.SizeSquared() > pow(Slide_MinSpeed, 2) && GetSlideSurface(PotentialSlideSurfaces))
+		{
+			EnterSlide();
+		}
+	}
+
+	if (IsCustomMovementMode(CMOVE_Slide) && !bWantsToCrouch)
+	{
+		ExitSlide();
+	}
+	
+	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
+}
+
+void UExtendedCMC::PhysCustom(float deltaTime, int32 Iterations)
+{
+	Super::PhysCustom(deltaTime, Iterations);
+
+	switch (CustomMovementMode)
+	{
+	case CMOVE_Slide:
+		PhysSlide(deltaTime, Iterations);
+		break;
+	default:
+		UE_LOG(LogTemp, Fatal, TEXT("Invalid Movement Mode"));
+	}
+}
+
+void UExtendedCMC::EnterSlide()
+{
+	bWantsToCrouch = true;
+	Velocity += Velocity.GetSafeNormal2D() * Slide_EnterImpulse;
+	SetMovementMode(MOVE_Custom, CMOVE_Slide);
+}
+
+void UExtendedCMC::ExitSlide()
+{
+	bWantsToCrouch = false;
+
+	const FQuat NewRotation = FRotationMatrix::MakeFromXZ(UpdatedComponent->GetForwardVector().GetSafeNormal2D(), FVector::UpVector).ToQuat();
+	FHitResult Hit;
+	SafeMoveUpdatedComponent(FVector::ZeroVector, NewRotation, true, Hit);
+	SetMovementMode(MOVE_Walking);
+}
+
+void UExtendedCMC::PhysSlide(float deltaTime, int32 Iterations)
+{
+	if (deltaTime < MIN_TICK_TIME)
+	{
+		return;
+	}
+
+	RestorePreAdditiveRootMotionVelocity();
+
+	FHitResult SurfaceHit;
+	if (!GetSlideSurface(SurfaceHit) || Velocity.SizeSquared() < pow(Slide_MinSpeed, 2))
+	{
+		ExitSlide();
+		StartNewPhysics(deltaTime, Iterations);
+		return;
+	}
+
+	// Surface Gravity
+	Velocity += Slide_GravityForce *FVector::DownVector * deltaTime;
+
+	// Strafe
+	if (FMath::Abs(FVector::DotProduct(Acceleration.GetSafeNormal(), UpdatedComponent->GetRightVector())) > .5f)
+	{
+		Acceleration = Acceleration.ProjectOnTo(UpdatedComponent->GetRightVector());
+	}
+	else
+	{
+		Acceleration = FVector::ZeroVector;
+	}
+
+	// Calc Velocity
+	if (!HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity())
+	{
+		CalcVelocity(deltaTime, Slide_Friction, true, GetMaxBrakingDeceleration());
+	}
+	ApplyRootMotionToVelocity(deltaTime);
+
+	// Perform Move
+	Iterations++;
+	bJustTeleported = false;
+
+	FVector OldLocation = UpdatedComponent->GetComponentLocation();
+	FQuat OldRotation = UpdatedComponent->GetComponentRotation().Quaternion();
+	FHitResult Hit(1.f);
+	FVector Adjusted = Velocity * deltaTime; // x = v * dt
+	FVector VelPlaneDir = FVector::VectorPlaneProject(Velocity, SurfaceHit.Normal).GetSafeNormal();
+	FQuat NewRotation = FRotationMatrix::MakeFromXZ(VelPlaneDir, SurfaceHit.Normal).ToQuat();
+	SafeMoveUpdatedComponent(Adjusted, NewRotation, true, Hit);
+
+	if (Hit.Time < 1.f)
+	{
+		HandleImpact(Hit, deltaTime, Adjusted);
+		SlideAlongSurface(Adjusted, (1.f - Hit.Time), Hit.Normal, Hit, true);
+	}
+
+	FHitResult NewSurfaceHit;
+	if (GetSlideSurface(NewSurfaceHit) || Velocity.SizeSquared() < pow(Slide_MinSpeed, 2))
+	{
+		ExitSlide();
+	}
+
+	// Update Outgoing Velocity & Acceleration
+	if (!bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity())
+	{
+		Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / deltaTime; // v = dx / dt
+	}
+}
+
+bool UExtendedCMC::GetSlideSurface(FHitResult& Hit) const
+{
+	const FVector Start = UpdatedComponent->GetComponentLocation();
+	const FVector End = Start + CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() * 2.f * FVector::DownVector;
+	const FName ProfileName = TEXT("BlockAll");
+	return GetWorld()->LineTraceSingleByProfile(Hit, Start, End, ProfileName, MccOwner->GetIgnoreCharacterParams());
 }
 
 UExtendedCMC::UExtendedCMC()
 {
 	NavAgentProps.bCanCrouch = true;
+}
+
+void UExtendedCMC::InitializeComponent()
+{
+	Super::InitializeComponent();
+
+	MccOwner = Cast<AMultiplayerCMCCharacter>(GetOwner());
 }
 
 void UExtendedCMC::SprintPressed()
@@ -115,4 +267,9 @@ void UExtendedCMC::SprintReleased()
 void UExtendedCMC::CrouchPressed()
 {
 	bWantsToCrouch = !bWantsToCrouch;
+}
+
+bool UExtendedCMC::IsCustomMovementMode(ECustomMovementMode InCustomMovementMode) const
+{
+	return MovementMode == MOVE_Custom && CustomMovementMode == InCustomMovementMode;
 }
