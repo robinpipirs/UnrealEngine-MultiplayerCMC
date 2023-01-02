@@ -99,6 +99,7 @@ void UExtendedCMC::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocat
 
 UExtendedCMC::UExtendedCMC()
 {
+	NavAgentProps.bCanCrouch = true;
 }
 
 void UExtendedCMC::SprintPressed()
@@ -109,4 +110,9 @@ void UExtendedCMC::SprintPressed()
 void UExtendedCMC::SprintReleased()
 {
 	Safe_bWantsToSprint = false;
+}
+
+void UExtendedCMC::CrouchPressed()
+{
+	bWantsToCrouch = !bWantsToCrouch;
 }
