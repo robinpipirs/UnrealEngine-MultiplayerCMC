@@ -138,6 +138,16 @@ void UExtendedCMC::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocat
 	}
 }
 
+bool UExtendedCMC::IsMovingOnGround() const
+{
+	return Super::IsMovingOnGround() || IsCustomMovementMode(CMOVE_Slide);
+}
+
+bool UExtendedCMC::CanCrouchInCurrentState() const
+{
+	return Super::CanCrouchInCurrentState() && IsMovingOnGround();
+}
+
 void UExtendedCMC::EnterSlide()
 {
 	bWantsToCrouch = true;
