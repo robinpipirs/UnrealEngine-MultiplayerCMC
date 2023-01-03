@@ -39,13 +39,13 @@ uint8 UExtendedCMC::FSavedMove_Extended::GetCompressedFlags() const
 	return Result;
 }
 
-void UExtendedCMC::FSavedMove_Extended::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
-	FNetworkPredictionData_Client_Character& ClientData)
+void UExtendedCMC::FSavedMove_Extended::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, FNetworkPredictionData_Client_Character& ClientData)
 {
 	FSavedMove_Character::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
 
-	UExtendedCMC* CharacterMovement = Cast<UExtendedCMC>(C->GetCharacterMovement());
+	const UExtendedCMC* CharacterMovement = Cast<UExtendedCMC>(C->GetCharacterMovement());
 	Saved_bWantsToSprint = CharacterMovement->Safe_bWantsToSprint;
+	Saved_bPrevWantsToCrouch = CharacterMovement->Safe_bPrevWantsToCrouch;
 }
 
 void UExtendedCMC::FSavedMove_Extended::PrepMoveFor(ACharacter* C)
@@ -54,6 +54,7 @@ void UExtendedCMC::FSavedMove_Extended::PrepMoveFor(ACharacter* C)
 
 	UExtendedCMC* CharacterMovement = Cast<UExtendedCMC>(C->GetCharacterMovement());
 	CharacterMovement->Safe_bWantsToSprint = Saved_bWantsToSprint;
+	CharacterMovement->Safe_bPrevWantsToCrouch = Saved_bPrevWantsToCrouch;
 }
 
 UExtendedCMC::FNetworkPredictionData_Client_Extended::FNetworkPredictionData_Client_Extended(const UCharacterMovementComponent& ClientMovement)
