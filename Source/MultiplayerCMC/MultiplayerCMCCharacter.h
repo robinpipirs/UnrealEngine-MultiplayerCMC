@@ -10,7 +10,9 @@ UCLASS(config=Game)
 class AMultiplayerCMCCharacter : public ACharacter
 {
 	GENERATED_BODY()
-
+protected:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category=Movement) class UExtendedCMC* ExtendedCMC;
+	
 	/** Camera boom positioning the camera behind the character */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	class USpringArmComponent* CameraBoom;
@@ -19,7 +21,7 @@ class AMultiplayerCMCCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* FollowCamera;
 public:
-	AMultiplayerCMCCharacter();
+	AMultiplayerCMCCharacter(const FObjectInitializer& ObjectInitializer);
 
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category=Input)
@@ -61,5 +63,10 @@ public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+	
+	UFUNCTION(BlueprintPure) FORCEINLINE UExtendedCMC* GetExtendedCharacterMovement() const { return ExtendedCMC; }
+	
+	FCollisionQueryParams GetIgnoreCharacterParams() const;
+
 };
 

@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MultiplayerCMCCharacter.h"
+
+#include "ExtendedCMC.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
@@ -11,8 +13,10 @@
 //////////////////////////////////////////////////////////////////////////
 // AMultiplayerCMCCharacter
 
-AMultiplayerCMCCharacter::AMultiplayerCMCCharacter()
+AMultiplayerCMCCharacter::AMultiplayerCMCCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UExtendedCMC>(ACharacter::CharacterMovementComponentName))
 {
+	ExtendedCMC = Cast<UExtendedCMC>(GetCharacterMovement());
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
@@ -126,4 +130,16 @@ void AMultiplayerCMCCharacter::MoveRight(float Value)
 		// add movement in that direction
 		AddMovementInput(Direction, Value);
 	}
+}
+
+FCollisionQueryParams AMultiplayerCMCCharacter::GetIgnoreCharacterParams() const
+{
+	FCollisionQueryParams Params;
+
+	TArray<AActor*> CharacterChildren;
+	GetAllChildActors(CharacterChildren);
+	Params.AddIgnoredActors(CharacterChildren);
+	Params.AddIgnoredActor(this);
+
+	return Params;
 }
