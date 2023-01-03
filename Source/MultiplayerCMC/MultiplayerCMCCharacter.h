@@ -65,5 +65,8 @@ public:
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	
 	UFUNCTION(BlueprintPure) FORCEINLINE UExtendedCMC* GetExtendedCharacterMovement() const { return ExtendedCMC; }
+	
+	FCollisionQueryParams GetIgnoreCharacterParams() const;
+
 };
 
