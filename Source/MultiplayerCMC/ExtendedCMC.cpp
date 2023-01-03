@@ -90,8 +90,6 @@ void UExtendedCMC::PhysCustom(float deltaTime, int32 Iterations)
 {
 	Super::PhysCustom(deltaTime, Iterations);
 
-	Super::PhysCustom(deltaTime, Iterations);
-
 	switch (CustomMovementMode)
 	{
 	case CMOVE_Slide:
@@ -136,6 +134,8 @@ void UExtendedCMC::OnMovementUpdated(float DeltaSeconds, const FVector& OldLocat
 		}
 		
 	}
+
+	Safe_bPrevWantsToCrouch = bWantsToCrouch;
 }
 
 bool UExtendedCMC::IsMovingOnGround() const
