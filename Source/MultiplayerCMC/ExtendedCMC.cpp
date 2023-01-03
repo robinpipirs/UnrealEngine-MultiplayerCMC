@@ -34,7 +34,7 @@ uint8 UExtendedCMC::FSavedMove_Extended::GetCompressedFlags() const
 {
 	uint8 Result = FSavedMove_Character::GetCompressedFlags();
 
-	if (Saved_bWantsToSprint) Result |= FLAG_Sprint;
+	if (Saved_bWantsToSprint) Result |= FLAG_Custom_0;
 
 	return Result;
 }
@@ -84,7 +84,7 @@ FNetworkPredictionData_Client* UExtendedCMC::GetPredictionData_Client() const
 void UExtendedCMC::UpdateFromCompressedFlags(uint8 Flags)
 {
 	Super::UpdateFromCompressedFlags(Flags);
-	Safe_bWantsToSprint = (Flags & FSavedMove_Extended::FLAG_Sprint) != 0;
+	Safe_bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
 }
 
 void UExtendedCMC::PhysCustom(float deltaTime, int32 Iterations)
